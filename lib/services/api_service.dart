@@ -1,92 +1,133 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'dart:io';
 
 /// API 服务类 - 调用云端大模型生成彩虹屁
 class ApiService {
   // 智谱AI端点
-  static const String _baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  static const String _baseUrl = 'open.bigmodel.cn';
   
   // API Key - 从环境变量读取（通过 --dart-define 注入）
-  // 默认值：用户提供的 Key（用于本地测试）
   static const String _apiKey = String.fromEnvironment(
     'API_KEY',
     defaultValue: '72a157d1d2e448c6babe29bb2301ee36.ItxX8jV56yCC8TrF',
   );
   
+  static const int _maxRetries = 3;
+  static const Duration _timeout = Duration(seconds: 30);
+  
   /// 生成彩虹屁
-  /// [identity] 身份（默认"小学生"）
-  /// [event] 具体要夸的事情（默认"认真学习"）
-  /// [minWords] 最小字数（默认10）
-  /// [maxWords] 最大字数（默认50）
-  /// 
-  /// 可能抛出异常：
-  /// - [Exception] 包含错误信息
   static Future<String> generateRainbowPuff({
     String identity = '小学生',
     String event = '认真学习',
     int minWords = 10,
     int maxWords = 50,
   }) async {
-    print('[ApiService] API Key prefix: ${_apiKey.substring(0, 8)}...');
-    print('[ApiService] generateRainbowPuff: identity=$identity, event=$event');
+    print('[ApiService] === Starting API call ===');
+    print('[ApiService] Key prefix: ${_apiKey.substring(0, 8)}...');
+    print('[ApiService] identity=$identity event=$event');
+    
+    // 构建提示词
+    final prompt = _buildPrompt(identity, event, minWords, maxWords);
+    
+    // 构建请求体
+    final requestBody = jsonEncode({
+      'model': 'glm-4-flash',
+      'messages': [
+        {'role': 'user', 'content': prompt}
+      ],
+      'temperature': 0.9,
+      'max_tokens': 100,
+    });
+    
+    print('[ApiService] Request body length: ${requestBody.length} chars');
+    
+    // 重试逻辑
+    Exception? lastError;
+    for (int attempt = 1; attempt <= _maxRetries; attempt++) {
+      try {
+        print('[ApiService] Attempt $attempt/$_maxRetries...');
+        return await _makeRequest(requestBody);
+      } catch (e, stack) {
+        lastError = _wrapError(e, attempt, stack);
+        print('[ApiService] Attempt $attempt failed: $lastError');
+        if (attempt < _maxRetries) {
+          print('[ApiService] Retrying in ${attempt * 2}s...');
+          await Future.delayed(Duration(seconds: attempt * 2));
+        }
+      }
+    }
+    
+    print('[ApiService] All $_maxRetries attempts failed');
+    throw lastError!;
+  }
+  
+  /// 执行单次 HTTP 请求（使用 dart:io HttpClient）
+  static Future<String> _makeRequest(String requestBody) async {
+    final client = HttpClient();
+    client.connectionTimeout = _timeout;
     
     try {
-      // 构建提示词
-      final prompt = _buildPrompt(identity, event, minWords, maxWords);
+      final uri = Uri.https(_baseUrl, '/api/paas/v4/chat/completions');
+      print('[ApiService] POST $uri');
       
-      // 构建请求体
-      final requestBody = jsonEncode({
-        'model': 'glm-4-flash',
-        'messages': [
-          {'role': 'user', 'content': prompt}
-        ],
-        'temperature': 0.9,
-        'max_tokens': 100,
-      });
+      final request = await client.postUrl(uri).timeout(Duration(seconds: 10));
+      request.headers.set('Content-Type', 'application/json');
+      request.headers.set('Authorization', 'Bearer $_apiKey');
+      request.write(requestBody);
       
-      print('[ApiService] Sending request to: $_baseUrl');
-      print('[ApiService] Request body: $requestBody');
+      final response = await request.close().timeout(_timeout);
+      final statusCode = response.statusCode;
+      final responseBody = await response.transform(utf8.decoder).join();
       
-      // 发送请求
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: requestBody,
-      );
+      print('[ApiService] Status: $statusCode');
+      print('[ApiService] Response: ${responseBody.substring(0, responseBody.length > 300 ? 300 : responseBody.length)}');
       
-      print('[ApiService] Response status: ${response.statusCode}');
-      print('[ApiService] Response body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (statusCode == 200) {
+        final data = jsonDecode(responseBody);
         final content = data['choices'][0]['message']['content'] as String;
-        print('[ApiService] Success! Content: $content');
+        print('[ApiService] SUCCESS');
         return content.trim();
-      } else {
-        // 打印详细错误信息便于调试
-        final errorBody = response.body;
-        print('[ApiService] API Error ${response.statusCode}: $errorBody');
-        
-        String errorMsg = 'API 请求失败 (${response.statusCode})';
-        try {
-          final err = jsonDecode(errorBody);
-          errorMsg += ': ${err['error']?['message'] ?? errorBody}';
-        } catch (_) {
-          errorMsg += ': $errorBody';
-        }
-        throw Exception(errorMsg);
       }
-    } catch (e) {
-      if (e is Exception) {
-        print('[ApiService] Exception: $e');
-        throw e;
-      }
-      print('[ApiService] Unknown error: $e');
-      throw Exception('网络错误: $e');
+      
+      // 非200响应
+      String errorMsg = 'API 错误 ($statusCode)';
+      try {
+        final err = jsonDecode(responseBody);
+        final serverMsg = err['error']?['message'];
+        if (serverMsg != null) errorMsg += ': $serverMsg';
+      } catch (_) {}
+      throw Exception(errorMsg);
+      
+    } finally {
+      client.close();
     }
+  }
+  
+  /// 包装错误信息（包含类型、堆栈）
+  static Exception _wrapError(dynamic e, int attempt, StackTrace stack) {
+    final typeName = e.runtimeType.toString();
+    final detail = e.toString().replaceAll('\n', ' | ');
+    final stackLines = stack.toString().split('\n').take(3).join(' -> ');
+    print('[ApiService] Error type: $typeName');
+    print('[ApiService] Error detail: $detail');
+    print('[ApiService] Stack: $stackLines');
+    
+    if (e is SocketException) {
+      return Exception('网络连接失败: ${e.message} (地址: ${e.address?.host}, 端口: ${e.port})');
+    }
+    if (e is HandshakeException) {
+      return Exception('SSL握手失败: ${e.message}');
+    }
+    if (e is TlsException) {
+      return Exception('TLS证书错误: ${e.message}');
+    }
+    if (e is TimeoutException) {
+      return Exception('请求超时 (${_timeout.inSeconds}秒)');
+    }
+    if (e is HttpException) {
+      return Exception('HTTP协议错误: ${e.message}');
+    }
+    return Exception('[$typeName] $detail');
   }
   
   /// 构建提示词
@@ -113,6 +154,7 @@ class ApiService {
       await generateRainbowPuff(identity: '测试', event: '测试', minWords: 10, maxWords: 20);
       return true;
     } catch (e) {
+      print('[ApiService] Connection test failed: $e');
       return false;
     }
   }
