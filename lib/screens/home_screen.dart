@@ -86,9 +86,9 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isGenerating = false;
       });
-      // API 调用失败，弹出提示
+      // 显示实际错误信息
       if (mounted) {
-        _showErrorDialog('使用额度已用完，请稍后再试或联系管理员 🌟');
+        _showErrorDialog('生成失败: $e\n\n请检查网络后重试 🌟');
       }
     }
   }

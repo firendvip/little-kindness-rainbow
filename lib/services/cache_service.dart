@@ -39,11 +39,13 @@ class CacheService {
   /// 生成一条彩虹屁（通用版）
   Future<String?> _generateOne() async {
     try {
+      print('[CacheService] Calling API to generate one puff...');
       return await ApiService.generateRainbowPuff(
         identity: '小学生',
         event: '认真学习',
       );
     } catch (e) {
+      print('[CacheService] API call failed: $e');
       // 生成失败，返回备用内容
       return _getFallbackPuff();
     }
