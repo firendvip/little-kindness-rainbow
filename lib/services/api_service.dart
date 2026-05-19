@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 
 /// API 服务类 - 调用云端大模型生成彩虹屁
 class ApiService {
