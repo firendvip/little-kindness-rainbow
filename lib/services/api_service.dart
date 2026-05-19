@@ -13,9 +13,6 @@ class ApiService {
     defaultValue: '72a157d1d2e448c6babe29bb2301ee36.ItxX8jV56yCC8TrF',
   );
   
-  // 注意：构建时需要通过 --dart-define=API_KEY=your_key 注入
-  // 例如：flutter build apk --dart-define=API_KEY=72a157d1d2e448c6babe29bb2301ee36.ItxX8jV56yCC8TrF
-  
   /// 生成彩虹屁
   /// [identity] 身份（默认"小学生"）
   /// [event] 具体要夸的事情（默认"认真学习"）
@@ -30,6 +27,9 @@ class ApiService {
     int minWords = 10,
     int maxWords = 50,
   }) async {
+    print('[ApiService] API Key prefix: ${_apiKey.substring(0, 8)}...');
+    print('[ApiService] generateRainbowPuff: identity=$identity, event=$event');
+    
     try {
       // 构建提示词
       final prompt = _buildPrompt(identity, event, minWords, maxWords);
@@ -44,6 +44,9 @@ class ApiService {
         'max_tokens': 100,
       });
       
+      print('[ApiService] Sending request to: $_baseUrl');
+      print('[ApiService] Request body: $requestBody');
+      
       // 发送请求
       final response = await http.post(
         Uri.parse(_baseUrl),
@@ -54,14 +57,18 @@ class ApiService {
         body: requestBody,
       );
       
+      print('[ApiService] Response status: ${response.statusCode}');
+      print('[ApiService] Response body: ${response.body}');
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'] as String;
+        print('[ApiService] Success! Content: $content');
         return content.trim();
       } else {
         // 打印详细错误信息便于调试
         final errorBody = response.body;
-        print('API Error ${response.statusCode}: $errorBody');
+        print('[ApiService] API Error ${response.statusCode}: $errorBody');
         
         String errorMsg = 'API 请求失败 (${response.statusCode})';
         try {
@@ -74,8 +81,10 @@ class ApiService {
       }
     } catch (e) {
       if (e is Exception) {
+        print('[ApiService] Exception: $e');
         throw e;
       }
+      print('[ApiService] Unknown error: $e');
       throw Exception('网络错误: $e');
     }
   }
