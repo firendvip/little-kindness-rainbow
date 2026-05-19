@@ -34,14 +34,15 @@ jobs:
       
     - name: Fix Flutter SDK path in settings.gradle
       run: |
-        # The flutter create generates settings.gradle with a hardcoded path
-        # We need to replace it with the actual FLUTTER_ROOT path
-        FLUTTER_SDK=${{ env.FLUTTER_ROOT }}
-        echo "Flutter SDK: $FLUTTER_SDK"
-        # Replace the hardcoded path with the actual path
+        FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
+        echo "Flutter SDK path: $FLUTTER_SDK"
+        echo "FLUTTER_ROOT from env: $FLUTTER_ROOT"
         if [ -f "android/settings.gradle" ]; then
+          echo "--- Before fix ---"
+          grep flutter_tools android/settings.gradle || echo "no flutter_tools found"
           sed -i "s|/packages/flutter_tools/gradle|$FLUTTER_SDK/packages/flutter_tools/gradle|g" android/settings.gradle
-          cat android/settings.gradle
+          echo "--- After fix ---"
+          grep flutter_tools android/settings.gradle || echo "no flutter_tools found"
         fi
         
     - name: Install dependencies
