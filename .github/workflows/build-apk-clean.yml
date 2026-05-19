@@ -26,42 +26,27 @@ jobs:
         flutter-version: '3.29.2'
         channel: 'stable'
         
-    - name: Remove android directory and rebuild
+    - name: Remove and recreate android
       run: |
         rm -rf android build .gradle
         flutter create --platforms=android --project-name little_kindness_rainbow .
         
-    - name: Overwrite settings.gradle with correct paths
+    - name: Write correct local.properties
       run: |
         FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
-        echo "Flutter SDK: $FLUTTER_SDK"
-        ls "$FLUTTER_SDK/packages/flutter_tools/gradle/" || echo "DIR NOT FOUND"
-        
-        # Write a correct settings.gradle
-        cat > android/settings.gradle << 'GRADLE_EOF'
-        include ':app'
-        
-        def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
-        def properties = new Properties()
-        
-        if (localPropertiesFile.exists()) {
-            properties.load(localPropertiesFile.newDataInputStream())
-        }
-        
-        def flutterSdkPath = properties.getProperty("flutter.sdk")
-        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-        
-        includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle")
-        
-        apply from: "${flutterSdkPath}/packages/flutter_tools/gradle/app_plugin_loader.gradle"
-        GRADLE_EOF
-        
-        echo "--- settings.gradle ---"
-        cat android/settings.gradle
+        echo "flutter.sdk=$FLUTTER_SDK" > android/local.properties
+        echo "SDK path: $FLUTTER_SDK"
+        cat android/local.properties
         
     - name: Install dependencies
       run: flutter pub get
       
+    - name: Ensure local.properties before build
+      run: |
+        FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
+        echo "flutter.sdk=$FLUTTER_SDK" > android/local.properties
+        cat android/local.properties
+        
     - name: Build APK (release)
       run: flutter build apk --release --dart-define=API_KEY=${{ secrets.API_KEY }}
       env:
