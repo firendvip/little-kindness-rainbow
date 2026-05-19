@@ -58,14 +58,25 @@ class ApiService {
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'] as String;
         return content.trim();
-      } else if (response.statusCode == 401) {
-        // 401: Unauthorized - API Key 无效或被删除
-        throw Exception('API Key 无效，请检查配置');
-      } else if (response.statusCode == 429) {
-        // 429: Too Many Requests - 额度用完或请求频率超限
-        throw Exception('使用额度已用完，请稍后再试');
       } else {
-        throw Exception('请求失败 (${response.statusCode}): ${response.body}');
+        // 打印详细错误信息便于调试
+        final errorBody = response.body;
+        print('API Error ${response.statusCode}: $errorBody');
+        
+        if (response.statusCode == 401) {
+          throw Exception('API Key 无效或已过期 (401)');
+        } else if (response.statusCode == 429) {
+          // 尝试解析错误信息
+          try {
+            final err = jsonDecode(errorBody);
+            final msg = err['error']?['message'] ?? '未知错误';
+            throw Exception('请求频率超限 (429): $msg');
+          } catch (_) {
+            throw Exception('使用额度已用完，请稍后再试 (429)');
+          }
+        } else {
+          throw Exception('API 请求失败 (${response.statusCode}): $errorBody');
+        }
       }
     } catch (e) {
       if (e is Exception) {
