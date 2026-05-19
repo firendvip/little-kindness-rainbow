@@ -2,15 +2,6 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
-/// API 调用失败的特殊异常
-class ApiException implements Exception {
-  final String message;
-  ApiException(this.message);
-  
-  @override
-  String toString() => message;
-}
-
 /// 缓存服务类 - 管理20条彩虹屁缓存
 class CacheService {
   static const String _cacheKey = 'rainbow_puff_cache';
@@ -98,7 +89,7 @@ class CacheService {
   /// [identity] 身份
   /// [event] 具体要夸的事情
   /// 
-  /// 如果 API 调用失败，会抛出 [ApiException] 异常
+  /// 如果 API 调用失败，会抛出 [Exception] 异常
   /// 调用者应该捕获此异常并显示友好提示
   Future<String> generateCustom({String identity = '小学生', required String event}) async {
     try {
@@ -111,12 +102,12 @@ class CacheService {
       _refillCache();
       
       return puff;
-    } on ApiException {
+    } on Exception {
       // 重新抛出 API 异常，让 UI 层处理
       rethrow;
     } catch (e) {
-      // 其他异常，包装成 ApiException
-      throw ApiException('网络请求失败: $e');
+      // 其他异常，包装成 Exception
+      throw Exception('网络请求失败: $e');
     }
   }
   
