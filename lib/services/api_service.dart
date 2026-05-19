@@ -21,6 +21,9 @@ class ApiService {
   /// [event] 具体要夸的事情（默认"认真学习"）
   /// [minWords] 最小字数（默认10）
   /// [maxWords] 最大字数（默认50）
+  /// 
+  /// 可能抛出异常：
+  /// - [ApiException] 包含错误信息
   static Future<String> generateRainbowPuff({
     String identity = '小学生',
     String event = '认真学习',
@@ -55,11 +58,20 @@ class ApiService {
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'] as String;
         return content.trim();
+      } else if (response.statusCode == 401) {
+        // 401: Unauthorized - API Key 无效或被删除
+        throw ApiException('API Key 无效，请检查配置');
+      } else if (response.statusCode == 429) {
+        // 429: Too Many Requests - 额度用完或请求频率超限
+        throw ApiException('使用额度已用完，请稍后再试 🌟');
       } else {
-        throw Exception('API 请求失败: ${response.statusCode} - ${response.body}');
+        throw ApiException('请求失败 (${response.statusCode}): ${response.body}');
       }
+    } on ApiException {
+      // 重新抛出 API 异常
+      rethrow;
     } catch (e) {
-      throw Exception('生成彩虹屁失败: $e');
+      throw ApiException('网络错误: $e');
     }
   }
   

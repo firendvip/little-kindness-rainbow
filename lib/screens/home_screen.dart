@@ -20,6 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isGenerating = false; // 是否正在生成
   String _identity = '小学生'; // 当前身份（默认"小学生"）
   
+  // 记录上一次的输入内容，用于判断是否需要调 API
+  String _lastInputEvent = '';
+  
   @override
   void initState() {
     super.initState();
@@ -59,12 +62,17 @@ class _HomeScreenState extends State<HomeScreen> {
       if (event.isEmpty) {
         // 不输入事件，从缓存取
         puff = await _cacheService.getOne();
+      } else if (event == _lastInputEvent) {
+        // 输入内容与上次相同，从缓存取（避免重复调用 API）
+        puff = await _cacheService.getOne();
       } else {
-        // 输入了事件，生成定制版
+        // 输入内容发生变化，调用 API 实时生成
         puff = await _cacheService.generateCustom(
           identity: _identity,
           event: event,
         );
+        // 更新上一次的输入记录
+        _lastInputEvent = event;
       }
       
       // 添加到历史记录
@@ -76,10 +84,42 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       setState(() {
-        _currentPuff = '生成失败，请重试 🌟';
         _isGenerating = false;
       });
+      // API 调用失败，弹出提示
+      if (mounted) {
+        _showErrorDialog('使用额度已用完，请稍后再试或联系管理员 🌟');
+      }
     }
+  }
+  
+  /// 显示错误弹窗
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 10),
+            Text('提示'),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
   
   /// 分享到微信
@@ -129,10 +169,11 @@ class _HomeScreenState extends State<HomeScreen> {
               // 主内容区
               Expanded(
                 child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(), // 禁止滚动抖动
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // 主卡片（显示彩虹屁）
+                      // 主卡片（显示彩虹屁）- 固定高度防止抖动
                       _buildMainCard(),
                       
                       const SizedBox(height: 30),
@@ -142,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       
                       const SizedBox(height: 20),
                       
-                      // 生成按钮
+                      // 生成按钮 - 固定高度防止抖动
                       _buildGenerateButton(),
                       
                       const SizedBox(height: 20),
@@ -193,10 +234,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  /// 主卡片
+  /// 主卡片 - 固定最小高度防止布局抖动
   Widget _buildMainCard() {
     return Container(
       width: double.infinity,
+      constraints: const BoxConstraints(
+        minHeight: 150, // 设置最小高度
+      ),
       padding: const EdgeInsets.all(30),
       decoration: BoxDecoration(
         color: const Color(0xF2FFFFFF), // rgba(255,255,255,0.95)
@@ -218,19 +262,27 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      child: _isGenerating
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : Text(
-              _currentPuff.isEmpty ? '点击生成按钮开始 ✨' : _currentPuff,
-              style: const TextStyle(
-                fontSize: 18,
-                color: Color(0xFF525F7F),
-                height: 1.5,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: _isGenerating
+            ? const SizedBox(
+                key: ValueKey('loading'),
+                height: 80,
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            : Text(
+                key: ValueKey(_currentPuff.isEmpty ? 'placeholder' : 'content'),
+                _currentPuff.isEmpty ? '点击生成按钮开始 ✨' : _currentPuff,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Color(0xFF525F7F),
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
+      ),
     );
   }
   
@@ -262,11 +314,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  /// 生成按钮
+  /// 生成按钮 - 固定高度防止抖动
   Widget _buildGenerateButton() {
     return Container(
       width: double.infinity,
-      height: 50,
+      height: 50, // 固定高度
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.centerLeft,
@@ -294,23 +346,28 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(25),
           ),
         ),
-        child: _isGenerating
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Text(
-                '生成彩虹屁 ✨',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+        child: SizedBox(
+          height: 50, // 固定高度与 Container 一致
+          child: Center(
+            child: _isGenerating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    '生成彩虹屁 ✨',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+          ),
+        ),
       ),
     );
   }
