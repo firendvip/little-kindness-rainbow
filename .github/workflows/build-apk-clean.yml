@@ -1,4 +1,4 @@
-name: Build Android APK (Clean Build)
+name: Build Android APK
 
 on:
   push:
@@ -26,24 +26,38 @@ jobs:
         flutter-version: '3.29.2'
         channel: 'stable'
         
-    - name: Remove old Android directory
-      run: rm -rf android
-    
-    - name: Recreate Android directory
-      run: flutter create --platforms=android .
-      
-    - name: Fix Flutter SDK path in settings.gradle
+    - name: Remove android directory and rebuild
+      run: |
+        rm -rf android build .gradle
+        flutter create --platforms=android --project-name little_kindness_rainbow .
+        
+    - name: Overwrite settings.gradle with correct paths
       run: |
         FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
-        echo "Flutter SDK path: $FLUTTER_SDK"
-        echo "FLUTTER_ROOT from env: $FLUTTER_ROOT"
-        if [ -f "android/settings.gradle" ]; then
-          echo "--- Before fix ---"
-          grep flutter_tools android/settings.gradle || echo "no flutter_tools found"
-          sed -i "s|/packages/flutter_tools/gradle|$FLUTTER_SDK/packages/flutter_tools/gradle|g" android/settings.gradle
-          echo "--- After fix ---"
-          grep flutter_tools android/settings.gradle || echo "no flutter_tools found"
-        fi
+        echo "Flutter SDK: $FLUTTER_SDK"
+        ls "$FLUTTER_SDK/packages/flutter_tools/gradle/" || echo "DIR NOT FOUND"
+        
+        # Write a correct settings.gradle
+        cat > android/settings.gradle << 'GRADLE_EOF'
+        include ':app'
+        
+        def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
+        def properties = new Properties()
+        
+        if (localPropertiesFile.exists()) {
+            properties.load(localPropertiesFile.newDataInputStream())
+        }
+        
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+        
+        includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle")
+        
+        apply from: "${flutterSdkPath}/packages/flutter_tools/gradle/app_plugin_loader.gradle"
+        GRADLE_EOF
+        
+        echo "--- settings.gradle ---"
+        cat android/settings.gradle
         
     - name: Install dependencies
       run: flutter pub get
@@ -53,18 +67,10 @@ jobs:
       env:
         API_KEY: ${{ secrets.API_KEY }}
         
-    - name: Upload APK as Artifact
+    - name: Upload APK
       if: success()
       uses: actions/upload-artifact@v4
       with:
         name: little-kindness-rainbow-v1.2
         path: build/app/outputs/flutter-apk/app-release.apk
         retention-days: 30
-        
-    - name: Upload build logs on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs-clean
-        path: build/
-        retention-days: 7
