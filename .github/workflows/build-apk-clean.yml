@@ -26,18 +26,24 @@ jobs:
         flutter-version: '3.29.2'
         channel: 'stable'
         
-    # Clean ALL build artifacts and caches
-    - name: Clean all caches and build artifacts
-      run: |
-        rm -rf android
-        rm -rf build
-        rm -rf .gradle
-        rm -rf ~/.gradle/caches
-        flutter clean
-        
-    - name: Recreate Android directory (clean)
+    - name: Remove old Android directory
+      run: rm -rf android
+    
+    - name: Recreate Android directory
       run: flutter create --platforms=android .
       
+    - name: Fix Flutter SDK path in settings.gradle
+      run: |
+        # The flutter create generates settings.gradle with a hardcoded path
+        # We need to replace it with the actual FLUTTER_ROOT path
+        FLUTTER_SDK=${{ env.FLUTTER_ROOT }}
+        echo "Flutter SDK: $FLUTTER_SDK"
+        # Replace the hardcoded path with the actual path
+        if [ -f "android/settings.gradle" ]; then
+          sed -i "s|/packages/flutter_tools/gradle|$FLUTTER_SDK/packages/flutter_tools/gradle|g" android/settings.gradle
+          cat android/settings.gradle
+        fi
+        
     - name: Install dependencies
       run: flutter pub get
       
