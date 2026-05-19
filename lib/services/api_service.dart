@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 
 /// API 服务类 - 调用云端大模型生成彩虹屁
 class ApiService {
-  // TODO: 请替换为实际的 API 端点
-  static const String _baseUrl = 'https://api.openai.com/v1/chat/completions';
+  // 智谱AI端点
+  static const String _baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
   
   // API Key - 从环境变量读取（通过 --dart-define 注入）
   // 默认值：用户提供的 Key（用于本地测试）
@@ -36,7 +36,7 @@ class ApiService {
       
       // 构建请求体
       final requestBody = jsonEncode({
-        'model': 'gpt-3.5-turbo',
+        'model': 'glm-4-flash',
         'messages': [
           {'role': 'user', 'content': prompt}
         ],
