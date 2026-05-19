@@ -20,22 +20,20 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isGenerating = false; // 是否正在生成
   String _identity = '小学生'; // 当前身份（默认"小学生"）
   
-  // 记录上一次的输入内容，用于判断是否需要调 API
-  String _lastInputEvent = '';
-  
   @override
   void initState() {
     super.initState();
     _loadInitialPuff();
   }
   
-  /// 加载初始彩虹屁（从缓存取一条）
+  /// 加载初始彩虹屁（从缓存取一条，如果缓存为空则调用 API）
   Future<void> _loadInitialPuff() async {
     setState(() {
       _isGenerating = true;
     });
     
     try {
+      // 先尝试从缓存读取，加快首屏展示
       final puff = await _cacheService.getOne();
       setState(() {
         _currentPuff = puff;
@@ -43,13 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       setState(() {
-        _currentPuff = '加载失败，请重试 🌟';
+        _currentPuff = '点击生成按钮开始 ✨';
         _isGenerating = false;
       });
     }
   }
   
-  /// 生成彩虹屁
+  /// 生成彩虹屁 - 每次点击都调用 API，不再走缓存 shortcut
   Future<void> _generatePuff() async {
     setState(() {
       _isGenerating = true;
@@ -57,23 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
     
     try {
       final event = _eventController.text.trim();
-      String puff;
-      
-      if (event.isEmpty) {
-        // 不输入事件，从缓存取
-        puff = await _cacheService.getOne();
-      } else if (event == _lastInputEvent) {
-        // 输入内容与上次相同，从缓存取（避免重复调用 API）
-        puff = await _cacheService.getOne();
-      } else {
-        // 输入内容发生变化，调用 API 实时生成
-        puff = await _cacheService.generateCustom(
-          identity: _identity,
-          event: event,
-        );
-        // 更新上一次的输入记录
-        _lastInputEvent = event;
-      }
+      // 始终调用 API 实时生成，空输入时用默认事件
+      final puff = await _cacheService.generateCustom(
+        identity: _identity,
+        event: event.isEmpty ? '认真学习' : event,
+      );
       
       // 添加到历史记录
       await _cacheService.addToHistory(puff);
@@ -86,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isGenerating = false;
       });
-      // 显示实际错误信息
+      // 显示真实错误信息（不再硬编码"额度已用完"）
       if (mounted) {
         _showErrorDialog('生成失败: $e\n\n请检查网络后重试 🌟');
       }
