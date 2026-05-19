@@ -63,20 +63,14 @@ class ApiService {
         final errorBody = response.body;
         print('API Error ${response.statusCode}: $errorBody');
         
-        if (response.statusCode == 401) {
-          throw Exception('API Key 无效或已过期 (401)');
-        } else if (response.statusCode == 429) {
-          // 尝试解析错误信息
-          try {
-            final err = jsonDecode(errorBody);
-            final msg = err['error']?['message'] ?? '未知错误';
-            throw Exception('请求频率超限 (429): $msg');
-          } catch (_) {
-            throw Exception('使用额度已用完，请稍后再试 (429)');
-          }
-        } else {
-          throw Exception('API 请求失败 (${response.statusCode}): $errorBody');
+        String errorMsg = 'API 请求失败 (${response.statusCode})';
+        try {
+          final err = jsonDecode(errorBody);
+          errorMsg += ': ${err['error']?['message'] ?? errorBody}';
+        } catch (_) {
+          errorMsg += ': $errorBody';
         }
+        throw Exception(errorMsg);
       }
     } catch (e) {
       if (e is Exception) {
